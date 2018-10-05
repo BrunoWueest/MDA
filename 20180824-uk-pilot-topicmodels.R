@@ -8,7 +8,7 @@
 
 # do not set the working directory every time but use pathes relative to your git clone--which
 # should be located in the Dropbox of this project (the one called 'chapters')
-setwd("~/Dropbox/WorkInProgress/NCCRBook/chapters/MDA")
+setwd("/home/pdm2admin/model")
 getwd()
 
 ### PREPARATION ###
@@ -75,8 +75,10 @@ write.csv(corpus$text_preprocessed, "../data/corpus_w2v.csv", row.names = F, fil
 # Generate a corpus for the stm 
 corpus_stm <- textProcessor(corpus[,c("text_preprocessed")], metadata=corpus, stem=T,
                         language="english", removestopwords=T, lowercase=F,
-                        removenumbers=F, removepunctuation=F)
-corpus_stm <- prepDocuments(corpus_stm$documents, corpus_stm$vocab, corpus_stm$meta, lower.thresh = 1)
+                        removenumbers=F, removepunctuation=F, customstopwords = c("will", "said", "can", "also", "may"))
+corpus_stm <- prepDocuments(corpus_stm$documents, corpus_stm$vocab, corpus_stm$meta, lower.thresh = 10)
+
+saveRDS(corpus_stm, "../data/corpus.rds")
 
 # Since we will use a deterministic (spectral) initialization of our topic model, many paramters of the topic model will 
 # be fixed. We only need an evaluation of the optimal number of topics, which we achive in three steps
@@ -96,7 +98,7 @@ rm(texts, i, corpus)
 
 # loop over ks and write out most probable words per topic for each model
 for (k in ks) {
- STM <- stm(corpus_stm$documents, corpus_stm$vocab, K=k, 
+ STM <- stm(corpus_stm$documents, corpus_stm$vocab, K=30, 
             as.formula(formula_prev), data = corpus_stm$meta,
             init.type="Spectral", verbose=T, 
             control = list(nits = 100, burnin = 25))
@@ -153,19 +155,22 @@ STM <- stm(corpus_stm$documents, corpus_stm$vocab, K=k, as.formula(formula_prev)
            control = list(nits = 100, burnin = 25))# Fit stm
 
 #save model output
-saveRDS(STM, "./Results/STM.rds")
+saveRDS(STM, "../data/STM_3.rds")
+STM <- readRDS("../data/STM_15.rds")
 
 # Save 100 most probable words per topic
 words <- labelTopics(STM, n = 100)
 words <- as.data.frame(t(words[[1]]))
-write.table(words, file = "./Results/words_6.txt", col.names = T, row.names = F, sep = "\t", quote = F)
+write.table(words, file = "./results/words_15.txt", col.names = T, row.names = F, sep = "\t", quote = F)
+
+k <- 15
 
 #save 5 most relevant documents per topic
 thoughts <- findThoughts(STM, texts = corpus_stm$meta$article_text, n = 5, topics = 1:k)
 thoughtsDocs <- data.frame(matrix(unlist(thoughts$docs), nrow=k, byrow=T))
 thoughtsIndices <- data.frame(matrix(unlist(thoughts$index), nrow=k, byrow=T))
 thoughts <- cbind(thoughtsDocs, thoughtsIndices)
-write.csv(thoughts, paste0("./Results/thoughts_", k, ".csv"),
+write.csv(thoughts, paste0("./results/thoughts_", k, ".csv"),
           fileEncoding = "utf-8")
 
 # Write out probability, exclusivity and frequency of each word per topic
@@ -224,15 +229,15 @@ colnames(probscore) <- paste("probability_", 1:K, sep = "")
 scores <- cbind(probscore, exclscore, freqscore)
 scores$vocab <- STM$vocab
 
-outname <- paste0("./Results/scores_6.txt")
+outname <- paste0("./results/scores_15.txt")
 write.table(scores, outname, col.names = T, row.names = F, sep = "\t", quote = F)
 
 
 # produce word-plots
 
 # Read data and check its structure
-words <- read.delim2("./Results/words_6.txt")
-scores <- read.delim2("./Results/scores_6.txt")
+words <- read.delim2("./results/words_15.txt")
+scores <- read.delim2("./results/scores_15.txt")
 scores <- data.frame(scores)
 is.data.frame(scores)
 names(scores)
@@ -249,13 +254,15 @@ pr <- seq(1,co/3)
 ex <- seq(max(pr) + 1, max(pr) + co/3)
 fr <- seq(max(ex) + 1, max(ex) + co/3)
 
+library(ggplot2)
+
 # Plot and Save Top 50 (n) Words for each Topic (ncol(words)) by Prob, Excl and Freq
 n <- 50 
 for(i in 1:ncol(words)){
   topic <- data.frame(c(scores[, c(pr[i], ex[i], fr[i], co + 1)], i))
   colnames(topic) <- c("Probability", "Exclusivity", "Frequency", "Words", "Topic")
   topic <- topic[ topic[,4] %in% words[1:n,i] ,]
-  pdf(file = paste("./Results/Graphs/Plain_TopicPeakDE_", i, ".pdf", sep = ""), paper = "special", width=7, height=5.5)
+  pdf(file = paste("./results/wordplot_15_topic_", i, ".pdf", sep = ""), paper = "special", width=7, height=5.5)
   print(ggplot(data = topic, aes(x = Exclusivity, y = Frequency, label = Words)) + geom_text(aes(size = Probability)) + theme(legend.position = "none") + ggtitle(paste("Topic ", i, sep = "")))
   dev.off()
 }
@@ -271,21 +278,144 @@ for (i in 1:length(x$means)){
   dfs <- rbind(dfs, df)
 }
 colnames(dfs) <- c("pointEstimate", "lb", "ub", "topic", "WeeksPassed")
-outname <- paste0("./Results/effectsPeakDE_", "WeeksPassed.txt")
+outname <- paste0("./results/effects_15_", "WeeksPassed.txt")
 write.table(dfs, outname, col.names = T, row.names = F, sep = "\t", quote = F)
 
-#estimate actor type
-prep <- estimateEffect(1:k ~ actor.type, STM, meta = corpus_stm$meta)
-x <- plot(prep, covariate = "actor.type", model = STM, method="pointestimate")
+#estimate peak
+prep <- estimateEffect(1:k ~ peak, STM, meta = corpus_stm$meta)
+x <- plot(prep, covariate = "peak", model = STM, method="pointestimate")
 dfs <- data.frame()
 for (i in 1:length(x$means)){
   df <- data.frame(x$means[[i]], x$cis[[i]][1,], x$cis[[i]][2,])
   df <- cbind(df, i, x$uvals)
   dfs <- rbind(dfs, df)
 }
-colnames(dfs) <- c("pointEstimate", "lb", "ub", "topic", "actor.type")
-outname <- paste0("./Results/effectsPeakDE_", "ActorType_estimate.txt")
+colnames(dfs) <- c("pointEstimate", "lb", "ub", "topic", "peak")
+outname <- paste0("./results/effects_15_", "peak.txt")
 write.table(dfs, outname, col.names = T, row.names = F, sep = "\t", quote = F)
+
+#estimate media_type
+prep <- estimateEffect(1:k ~ media_type, STM, meta = corpus_stm$meta)
+x <- plot(prep, covariate = "media_type", model = STM, method="pointestimate")
+dfs <- data.frame()
+for (i in 1:length(x$means)){
+  df <- data.frame(x$means[[i]], x$cis[[i]][1,], x$cis[[i]][2,])
+  df <- cbind(df, i, x$uvals)
+  dfs <- rbind(dfs, df)
+}
+colnames(dfs) <- c("pointEstimate", "lb", "ub", "topic", "media_type")
+outname <- paste0("./results/effects_15_", "media_type.txt")
+write.table(dfs, outname, col.names = T, row.names = F, sep = "\t", quote = F)
+
+#estimate actor_type
+prep <- estimateEffect(1:k ~ actor_type, STM, meta = corpus_stm$meta)
+x <- plot(prep, covariate = "actor_type", model = STM, method="pointestimate")
+dfs <- data.frame()
+for (i in 1:length(x$means)){
+  df <- data.frame(x$means[[i]], x$cis[[i]][1,], x$cis[[i]][2,])
+  df <- cbind(df, i, x$uvals)
+  dfs <- rbind(dfs, df)
+}
+colnames(dfs) <- c("pointEstimate", "lb", "ub", "topic", "media_type")
+outname <- paste0("./results/effects_15_", "actor_type.txt")
+write.table(dfs, outname, col.names = T, row.names = F, sep = "\t", quote = F)
+
+#estimate tonality_verbalized
+prep <- estimateEffect(1:k ~ tonality_verbalized, STM, meta = corpus_stm$meta)
+x <- plot(prep, covariate = "tonality_verbalized", model = STM, method="pointestimate")
+dfs <- data.frame()
+for (i in 1:length(x$means)){
+  df <- data.frame(x$means[[i]], x$cis[[i]][1,], x$cis[[i]][2,])
+  df <- cbind(df, i, x$uvals)
+  dfs <- rbind(dfs, df)
+}
+colnames(dfs) <- c("pointEstimate", "lb", "ub", "topic", "tonality_verbalized")
+outname <- paste0("./results/effects_15_", "tonality_verbalized.txt")
+write.table(dfs, outname, col.names = T, row.names = F, sep = "\t", quote = F)
+
+#estimate territorial_scope
+prep <- estimateEffect(1:k ~ territorial_scope, STM, meta = corpus_stm$meta)
+x <- plot(prep, covariate = "territorial_scope", model = STM, method="pointestimate")
+dfs <- data.frame()
+for (i in 1:length(x$means)){
+  df <- data.frame(x$means[[i]], x$cis[[i]][1,], x$cis[[i]][2,])
+  df <- cbind(df, i, x$uvals)
+  dfs <- rbind(dfs, df)
+}
+colnames(dfs) <- c("pointEstimate", "lb", "ub", "topic", "territorial_scope")
+outname <- paste0("./results/effects_15_", "territorial_scope.txt")
+write.table(dfs, outname, col.names = T, row.names = F, sep = "\t", quote = F)
+
+#estimate policy_output
+prep <- estimateEffect(1:k ~ policy_output, STM, meta = corpus_stm$meta)
+x <- plot(prep, covariate = "policy_output", model = STM, method="pointestimate")
+dfs <- data.frame()
+for (i in 1:length(x$means)){
+  df <- data.frame(x$means[[i]], x$cis[[i]][1,], x$cis[[i]][2,])
+  df <- cbind(df, i, x$uvals)
+  dfs <- rbind(dfs, df)
+}
+colnames(dfs) <- c("pointEstimate", "lb", "ub", "topic", "policy_output")
+outname <- paste0("./results/effects_15_", "policy_output.txt")
+write.table(dfs, outname, col.names = T, row.names = F, sep = "\t", quote = F)
+
+#estimate policy_scope
+prep <- estimateEffect(1:k ~ policy_scope, STM, meta = corpus_stm$meta)
+x <- plot(prep, covariate = "policy_scope", model = STM, method="pointestimate")
+dfs <- data.frame()
+for (i in 1:length(x$means)){
+  df <- data.frame(x$means[[i]], x$cis[[i]][1,], x$cis[[i]][2,])
+  df <- cbind(df, i, x$uvals)
+  dfs <- rbind(dfs, df)
+}
+colnames(dfs) <- c("pointEstimate", "lb", "ub", "topic", "policy_scope")
+outname <- paste0("./results/effects_15_", "policy_scope.txt")
+write.table(dfs, outname, col.names = T, row.names = F, sep = "\t", quote = F)
+
+#estimate functional_scope_informative
+prep <- estimateEffect(1:k ~ functional_scope_informative, STM, meta = corpus_stm$meta)
+x <- plot(prep, covariate = "functional_scope_informative", model = STM, method="pointestimate")
+dfs <- data.frame()
+for (i in 1:length(x$means)){
+  df <- data.frame(x$means[[i]], x$cis[[i]][1,], x$cis[[i]][2,])
+  df <- cbind(df, i, x$uvals)
+  dfs <- rbind(dfs, df)
+}
+colnames(dfs) <- c("pointEstimate", "lb", "ub", "topic", "functional_scope_informative")
+outname <- paste0("./results/effects_15_", "functional_scope_informative.txt")
+write.table(dfs, outname, col.names = T, row.names = F, sep = "\t", quote = F)
+
+#estimate functional_scope_implementing
+prep <- estimateEffect(1:k ~ functional_scope_implementing, STM, meta = corpus_stm$meta)
+x <- plot(prep, covariate = "functional_scope_implementing", model = STM, method="pointestimate")
+dfs <- data.frame()
+for (i in 1:length(x$means)){
+  df <- data.frame(x$means[[i]], x$cis[[i]][1,], x$cis[[i]][2,])
+  df <- cbind(df, i, x$uvals)
+  dfs <- rbind(dfs, df)
+}
+colnames(dfs) <- c("pointEstimate", "lb", "ub", "topic", "functional_scope_implementing")
+outname <- paste0("./results/effects_15_", "functional_scope_implementing.txt")
+write.table(dfs, outname, col.names = T, row.names = F, sep = "\t", quote = F)
+
+#estimate functional_scope_decisive
+prep <- estimateEffect(1:k ~ functional_scope_decisive, STM, meta = corpus_stm$meta)
+x <- plot(prep, covariate = "functional_scope_decisive", model = STM, method="pointestimate")
+dfs <- data.frame()
+for (i in 1:length(x$means)){
+  df <- data.frame(x$means[[i]], x$cis[[i]][1,], x$cis[[i]][2,])
+  df <- cbind(df, i, x$uvals)
+  dfs <- rbind(dfs, df)
+}
+colnames(dfs) <- c("pointEstimate", "lb", "ub", "topic", "functional_scope_decisive")
+outname <- paste0("./results/effects_15_", "functional_scope_decisive.txt")
+write.table(dfs, outname, col.names = T, row.names = F, sep = "\t", quote = F)
+
+
+
+#########
+
+
 
 # difference actor type
 x <- plot(prep, covariate = "actor.type", model = STM, method = "difference", cov.value1="public (non-elected)", 
@@ -305,14 +435,14 @@ write.table(dfs, outname, col.names = T, row.names = F, sep = "\t", quote = F)
 # correlation plots 
 
 # correlation of topic prevalence with daily trend
-d <- data.frame(read.delim("./Results/effects_WeeksPassed.txt"))
+d <- data.frame(read.delim(paste0("./results/effects_15_", "WeeksPassed.txt")))
 
 d <- d[order(d$topic, d$WeeksPassed),]
 length(d$WeeksPassed)
 max(d$WeeksPassed)
 mo <- seq(as.Date("2005-01-01"), by = "week", length.out = max(d$WeeksPassed))
 
-topic_labels <- 1:6 # can be used later to define substantial topics
+topic_labels <- 1:15 # can be used later to define substantial topics
 d$topicLabels <- NA
 d$date <- rep(mo, length(topic_labels))
 
@@ -327,20 +457,20 @@ for(j in 1:length(topic_labels)){
 
 d$topicLabels <- factor(d$topicLabels, levels = unique(d$topicLabels[order(d$pointEstimateAverage, decreasing = TRUE)]))
 
-pdf(file="./Results/Graphs/correlations-weekspassed.pdf", paper="special", width=12, height=9)
+pdf(file="./results/correlation_15_weekspassed.pdf", paper="special", width=12, height=9)
 print(ggplot(data = d, aes(x = date, y = pointEstimate)) +
         geom_line() +
         geom_hline(aes(yintercept = pointEstimateAverage), linetype = 2) +
-        facet_wrap(~ topicLabels, ncol = 2) +
+        facet_wrap(~ topicLabels, ncol = 3) +
         labs(x = "weeks", y = "Topic prevalence", title = "") +
         theme(legend.position = "bottom", legend.title = element_blank(), legend.key.size = unit(0.5, "cm")) +
         scale_alpha(guide = "none") +
         geom_ribbon(aes(ymin = lb, ymax= ub, alpha = 0.5))) 
 dev.off()
 
-# correlation of topic prevalence with Actor Type
-file_name <- "./Results/effects_ActorType_estimate.txt"
-var_label_long <- "Actor types in media reports"
+# correlation of topic prevalence with peak
+file_name <- "./results/effects_15_peak.txt"
+var_label_long <- "?"
 
 d <- data.frame(read.delim(file_name))
 var_label <- colnames(d)[5]
@@ -355,9 +485,9 @@ for(j in 1:length(topic_labels)){
 }
 
 d$topicLabels <- factor(d$topicLabels, levels = unique(d$topicLabels[order(d$pointEstimateAverage, decreasing = TRUE)]))
-#d$var <- as.factor(d$var)
+d$var <- as.factor(d$var)
 
-pdf(file=paste("./Results/Graphs/correlations-actortype.pdf", sep=""), paper="special", width=7, height=9)
+pdf(file=paste("./results/correlations_15_peak.pdf", sep=""), paper="special", width=7, height=9)
 print(
   ggplot(data = d, aes(x = topicLabels, y = pointEstimate, ymin = lb, ymax = ub, shape = var)) + #color = groupLabels, 
     geom_pointrange(position=position_dodge(width=0.5)) +
@@ -368,29 +498,279 @@ print(
 )
 dev.off()
 
-# difference of correlation of topic prevalence with tonality = positive and tonality = negative
-file_name <- "./Results/difference_ActorType_diff.txt"
-var_label_long <- "Actor type in media reports"
+# correlation of topic prevalence with media_type
+file_name <- "./results/effects_15_media_type.txt"
+var_label_long <- "?"
 
 d <- data.frame(read.delim(file_name))
 var_label <- colnames(d)[5]
 colnames(d)[5] <- c("var")
 
-#add topic labels
 d$topicLabels <- NA
+d$pointEstimateAverage <- NA
+
 for(j in 1:length(topic_labels)){
   d$topicLabels[d$topic == j] <- topic_labels[j]
+  d$pointEstimateAverage[d$topic == j] <- mean(d$pointEstimate[d$topic == j])
 }
 
-d$topicLabels <- factor(d$topicLabels, levels = unique(d$topicLabels[order(d$diff_nonelec_elec, decreasing = TRUE)]))
+d$topicLabels <- factor(d$topicLabels, levels = unique(d$topicLabels[order(d$pointEstimateAverage, decreasing = TRUE)]))
 d$var <- as.factor(d$var)
 
-pdf(file=paste("./Results/correlations-diff-actortype.pdf", sep=""), paper="special", width=6.5, height=5)
-print(ggplot(data = d, aes(x = topicLabels, y = diff_nonelec_elec, ymin = lb, ymax = ub)) + #, color = groupLabels
-        geom_pointrange() +
-        coord_flip() +
-        geom_hline(yintercept = 0, lty = 2, size = 0.5) +
-        labs(x = "", y = "Difference in topic prevalence (non-elected - elected)", title = "") +
-        theme(legend.position = "bottom", legend.title = element_blank())
+pdf(file=paste("./results/correlations_15_media_type.pdf", sep=""), paper="special", width=7, height=9)
+print(
+  ggplot(data = d, aes(x = topicLabels, y = pointEstimate, ymin = lb, ymax = ub, shape = var)) + #color = groupLabels, 
+    geom_pointrange(position=position_dodge(width=0.5)) +
+    coord_flip() +
+    geom_hline(yintercept = 1/k, lty = 2, size = 0.5) +
+    labs(x = "", y = "Topic prevalence", title = "") +
+    theme(legend.position = "bottom", legend.title = element_blank())
+)
+dev.off()
+
+
+# correlation of topic prevalence with actor_type
+file_name <- "./results/effects_15_actor_type.txt"
+var_label_long <- "?"
+
+d <- data.frame(read.delim(file_name))
+var_label <- colnames(d)[5]
+colnames(d)[5] <- c("var")
+
+d$topicLabels <- NA
+d$pointEstimateAverage <- NA
+
+for(j in 1:length(topic_labels)){
+  d$topicLabels[d$topic == j] <- topic_labels[j]
+  d$pointEstimateAverage[d$topic == j] <- mean(d$pointEstimate[d$topic == j])
+}
+
+d$topicLabels <- factor(d$topicLabels, levels = unique(d$topicLabels[order(d$pointEstimateAverage, decreasing = TRUE)]))
+d$var <- as.factor(d$var)
+
+pdf(file=paste("./results/correlations_15_actor_type.pdf", sep=""), paper="special", width=7, height=9)
+print(
+  ggplot(data = d, aes(x = topicLabels, y = pointEstimate, ymin = lb, ymax = ub, shape = var)) + #color = groupLabels, 
+    geom_pointrange(position=position_dodge(width=0.5)) +
+    coord_flip() +
+    geom_hline(yintercept = 1/k, lty = 2, size = 0.5) +
+    labs(x = "", y = "Topic prevalence", title = "") +
+    theme(legend.position = "bottom", legend.title = element_blank())
+)
+dev.off()
+
+
+# correlation of topic prevalence with tonality_verbalized
+file_name <- "./results/effects_15_tonality_verbalized.txt"
+var_label_long <- "?"
+
+d <- data.frame(read.delim(file_name))
+var_label <- colnames(d)[5]
+colnames(d)[5] <- c("var")
+
+d$topicLabels <- NA
+d$pointEstimateAverage <- NA
+
+for(j in 1:length(topic_labels)){
+  d$topicLabels[d$topic == j] <- topic_labels[j]
+  d$pointEstimateAverage[d$topic == j] <- mean(d$pointEstimate[d$topic == j])
+}
+
+d$topicLabels <- factor(d$topicLabels, levels = unique(d$topicLabels[order(d$pointEstimateAverage, decreasing = TRUE)]))
+d$var <- as.factor(d$var)
+
+pdf(file=paste("./results/correlations_15_tonality_verbalized.pdf", sep=""), paper="special", width=7, height=9)
+print(
+  ggplot(data = d, aes(x = topicLabels, y = pointEstimate, ymin = lb, ymax = ub, shape = var)) + #color = groupLabels, 
+    geom_pointrange(position=position_dodge(width=0.5)) +
+    coord_flip() +
+    geom_hline(yintercept = 1/k, lty = 2, size = 0.5) +
+    labs(x = "", y = "Topic prevalence", title = "") +
+    theme(legend.position = "bottom", legend.title = element_blank())
+)
+dev.off()
+
+
+
+# correlation of topic prevalence with territorial_scope
+file_name <- "./results/effects_15_territorial_scope.txt"
+var_label_long <- "?"
+
+d <- data.frame(read.delim(file_name))
+var_label <- colnames(d)[5]
+colnames(d)[5] <- c("var")
+
+d$topicLabels <- NA
+d$pointEstimateAverage <- NA
+
+for(j in 1:length(topic_labels)){
+  d$topicLabels[d$topic == j] <- topic_labels[j]
+  d$pointEstimateAverage[d$topic == j] <- mean(d$pointEstimate[d$topic == j])
+}
+
+d$topicLabels <- factor(d$topicLabels, levels = unique(d$topicLabels[order(d$pointEstimateAverage, decreasing = TRUE)]))
+d$var <- as.factor(d$var)
+
+pdf(file=paste("./results/correlations_15_territorial_scope.pdf", sep=""), paper="special", width=7, height=9)
+print(
+  ggplot(data = d, aes(x = topicLabels, y = pointEstimate, ymin = lb, ymax = ub, shape = var)) + #color = groupLabels, 
+    geom_pointrange(position=position_dodge(width=0.5)) +
+    coord_flip() +
+    geom_hline(yintercept = 1/k, lty = 2, size = 0.5) +
+    labs(x = "", y = "Topic prevalence", title = "") +
+    theme(legend.position = "bottom", legend.title = element_blank())
+)
+dev.off()
+
+
+# correlation of topic prevalence with policy_output
+file_name <- "./results/effects_15_policy_output.txt"
+var_label_long <- "?"
+
+d <- data.frame(read.delim(file_name))
+var_label <- colnames(d)[5]
+colnames(d)[5] <- c("var")
+
+d$topicLabels <- NA
+d$pointEstimateAverage <- NA
+
+for(j in 1:length(topic_labels)){
+  d$topicLabels[d$topic == j] <- topic_labels[j]
+  d$pointEstimateAverage[d$topic == j] <- mean(d$pointEstimate[d$topic == j])
+}
+
+d$topicLabels <- factor(d$topicLabels, levels = unique(d$topicLabels[order(d$pointEstimateAverage, decreasing = TRUE)]))
+d$var <- as.factor(d$var)
+
+pdf(file=paste("./results/correlations_15_policy_output.pdf", sep=""), paper="special", width=7, height=9)
+print(
+  ggplot(data = d, aes(x = topicLabels, y = pointEstimate, ymin = lb, ymax = ub, shape = var)) + #color = groupLabels, 
+    geom_pointrange(position=position_dodge(width=0.5)) +
+    coord_flip() +
+    geom_hline(yintercept = 1/k, lty = 2, size = 0.5) +
+    labs(x = "", y = "Topic prevalence", title = "") +
+    theme(legend.position = "bottom", legend.title = element_blank())
+)
+dev.off()
+
+
+# correlation of topic prevalence with policy_scope
+file_name <- "./results/effects_15_policy_scope.txt"
+var_label_long <- "?"
+
+d <- data.frame(read.delim(file_name))
+var_label <- colnames(d)[5]
+colnames(d)[5] <- c("var")
+
+d$topicLabels <- NA
+d$pointEstimateAverage <- NA
+
+for(j in 1:length(topic_labels)){
+  d$topicLabels[d$topic == j] <- topic_labels[j]
+  d$pointEstimateAverage[d$topic == j] <- mean(d$pointEstimate[d$topic == j])
+}
+
+d$topicLabels <- factor(d$topicLabels, levels = unique(d$topicLabels[order(d$pointEstimateAverage, decreasing = TRUE)]))
+d$var <- as.factor(d$var)
+
+pdf(file=paste("./results/correlations_15_policy_scope.pdf", sep=""), paper="special", width=7, height=9)
+print(
+  ggplot(data = d, aes(x = topicLabels, y = pointEstimate, ymin = lb, ymax = ub, shape = var)) + #color = groupLabels, 
+    geom_pointrange(position=position_dodge(width=0.5)) +
+    coord_flip() +
+    geom_hline(yintercept = 1/k, lty = 2, size = 0.5) +
+    labs(x = "", y = "Topic prevalence", title = "") +
+    theme(legend.position = "bottom", legend.title = element_blank())
+)
+dev.off()
+
+
+# correlation of topic prevalence with functional_scope_decisive
+file_name <- "./results/effects_15_functional_scope_decisive.txt"
+var_label_long <- "?"
+
+d <- data.frame(read.delim(file_name))
+var_label <- colnames(d)[5]
+colnames(d)[5] <- c("var")
+
+d$topicLabels <- NA
+d$pointEstimateAverage <- NA
+
+for(j in 1:length(topic_labels)){
+  d$topicLabels[d$topic == j] <- topic_labels[j]
+  d$pointEstimateAverage[d$topic == j] <- mean(d$pointEstimate[d$topic == j])
+}
+
+d$topicLabels <- factor(d$topicLabels, levels = unique(d$topicLabels[order(d$pointEstimateAverage, decreasing = TRUE)]))
+d$var <- as.factor(d$var)
+
+pdf(file=paste("./results/correlations_15_functional_scope_decisive.pdf", sep=""), paper="special", width=7, height=9)
+print(
+  ggplot(data = d, aes(x = topicLabels, y = pointEstimate, ymin = lb, ymax = ub, shape = var)) + #color = groupLabels, 
+    geom_pointrange(position=position_dodge(width=0.5)) +
+    coord_flip() +
+    geom_hline(yintercept = 1/k, lty = 2, size = 0.5) +
+    labs(x = "", y = "Topic prevalence", title = "") +
+    theme(legend.position = "bottom", legend.title = element_blank())
+)
+dev.off()
+
+
+# correlation of topic prevalence with functional_scope_implementing
+file_name <- "./results/effects_15_functional_scope_implementing.txt"
+var_label_long <- "?"
+
+d <- data.frame(read.delim(file_name))
+var_label <- colnames(d)[5]
+colnames(d)[5] <- c("var")
+
+d$topicLabels <- NA
+d$pointEstimateAverage <- NA
+
+for(j in 1:length(topic_labels)){
+  d$topicLabels[d$topic == j] <- topic_labels[j]
+  d$pointEstimateAverage[d$topic == j] <- mean(d$pointEstimate[d$topic == j])
+}
+
+d$topicLabels <- factor(d$topicLabels, levels = unique(d$topicLabels[order(d$pointEstimateAverage, decreasing = TRUE)]))
+d$var <- as.factor(d$var)
+
+pdf(file=paste("./results/correlations_15_functional_scope_implementing.pdf", sep=""), paper="special", width=7, height=9)
+print(
+  ggplot(data = d, aes(x = topicLabels, y = pointEstimate, ymin = lb, ymax = ub, shape = var)) + #color = groupLabels, 
+    geom_pointrange(position=position_dodge(width=0.5)) +
+    coord_flip() +
+    geom_hline(yintercept = 1/k, lty = 2, size = 0.5) +
+    labs(x = "", y = "Topic prevalence", title = "") +
+    theme(legend.position = "bottom", legend.title = element_blank())
+)
+dev.off()
+
+file_name <- "./results/effects_15_functional_scope_informative.txt"
+var_label_long <- "?"
+
+d <- data.frame(read.delim(file_name))
+var_label <- colnames(d)[5]
+colnames(d)[5] <- c("var")
+
+d$topicLabels <- NA
+d$pointEstimateAverage <- NA
+
+for(j in 1:length(topic_labels)){
+  d$topicLabels[d$topic == j] <- topic_labels[j]
+  d$pointEstimateAverage[d$topic == j] <- mean(d$pointEstimate[d$topic == j])
+}
+
+d$topicLabels <- factor(d$topicLabels, levels = unique(d$topicLabels[order(d$pointEstimateAverage, decreasing = TRUE)]))
+d$var <- as.factor(d$var)
+
+pdf(file=paste("./results/correlations_15_functional_scope_informative.pdf", sep=""), paper="special", width=7, height=9)
+print(
+  ggplot(data = d, aes(x = topicLabels, y = pointEstimate, ymin = lb, ymax = ub, shape = var)) + #color = groupLabels, 
+    geom_pointrange(position=position_dodge(width=0.5)) +
+    coord_flip() +
+    geom_hline(yintercept = 1/k, lty = 2, size = 0.5) +
+    labs(x = "", y = "Topic prevalence", title = "") +
+    theme(legend.position = "bottom", legend.title = element_blank())
 )
 dev.off()
