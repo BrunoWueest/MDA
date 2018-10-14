@@ -56,11 +56,15 @@ corpus$territorial_scope[corpus$territorial_scope %in% c("subnational", "regiona
 corpus$territorial_scope <- as.factor(corpus$territorial_scope)
 corpus$media_source <- as.factor(corpus$media_source)
 corpus$entity_name <- as.factor(corpus$entity_name)
+#is not not easier to work with entity_id numbers?
 corpus$media_type[corpus$media_type %in% c("regional", "tabloid_or_free")] <- "regional_tabloid_free"
+#I did the same grouping in my phd and it works well
 corpus$media_type[corpus$media_type %in% c("magazines", "quality")] <- "quality_magazines"
+#corpus$media_type[corpus$media_type %in% c("magazines", "quality")] <- "quality_and_magazines" #for clarity
 corpus$media_type <- as.factor(corpus$media_type)
 corpus$peak <- as.factor(corpus$peak)
 corpus$policy_output[corpus$policy_output %in% c("hard", "hard / soft")] <- "hard_soft"
+#In IP2 it is likely that all hard is concentrated in the EC, again with a separate analysis in the chapter this should not be a problem.
 corpus$policy_output <- as.factor(corpus$policy_output)
 corpus$policy_field_1 <- tolower(corpus$policy_field_1)
 corpus$policy_field_1 <- ifelse(corpus$policy_field_1 %in% c("multiple", "not definable", "", "."), "multiple", "specific")
