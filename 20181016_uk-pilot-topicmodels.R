@@ -54,6 +54,20 @@ for (i in 1:length(corpus$article_text)) {
 corpus$text_preprocessed <- gsub("\\s+", " ", corpus$text_preprocessed)
 corpus$text_preprocessed <- gsub("^\\s+|\\s+$", "", corpus$text_preprocessed)
 
+#General comments Jofre
+#JR: Control variables: there are already more than enough controls. Having the entity name in the group might be redundant if we have 
+    #already a dummy that identified problematic cases. On the correlation between variables and types of governors, the kind of problems 
+    #pointed out by Michael are going to be present throughout. Each IP will dominate in one particular territorial_scope and policy_scope. 
+    #For instance, all of IP2 is going to be actor_type=public and none is going to be "regional_national". However, I do not think we 
+    #need to exclude anything from the model, because as long as we include entity name as a control variable 
+    #and we can analyze considering the effect of IPs, keeping all variables in the model is how we are able to make general statements.
+#JR: Dummy variables to identify particular governors: In my case, it is important to point out the EC, with #entity_id 304219, and entity_name 
+    #european commission. 
+#JR: Recoding of the independent variables: I checked the recoding according to my IP, see my branch. Only a couple of comments, 
+    #I think we are looking at the right categories already.
+
+#MS: I have included the recoding comments in this file above
+
 # recode some vars. The stm likes factors - m.n. in the postestimation -, so we encode our indicators accordingly
 corpus$actor_type[corpus$actor_type %in% c("hybrid", "private")] <- "hybrid_private"
 corpus$actor_type <- as.factor(corpus$actor_type)
@@ -63,17 +77,30 @@ corpus$territorial_scope[corpus$territorial_scope %in% c("subnational", "regiona
 corpus$territorial_scope <- as.factor(corpus$territorial_scope)
 corpus$media_source <- as.factor(corpus$media_source)
 corpus$entity_name <- as.factor(corpus$entity_name)
+#JR: is not not easier to work with entity_id numbers?
+#MS: I guess it's good to have the entity names accessible and since we're working with factor variables 
+    #it doesn't make a difference anyway, right?
+
 #corpus$media_type[corpus$media_type %in% c("regional", "tabloid_or_free")] <- "regional_tabloid_free" 
 #MS: my earlier analyses have suggested, that this might be one of the (few) 
   #interesting sources of variation (i.e. regional news alone) for IP1; I would therefore prefer to keep them separate if possible
-corpus$media_type[corpus$media_type %in% c("magazines", "quality")] <- "quality_magazines"
+#JR: I did the same grouping in my phd and it works well
+
+#corpus$media_type[corpus$media_type %in% c("magazines", "quality")] <- "quality_magazines" #JR: for clarity
+#MS: @Jofre: so you wouldn't put magazines and quality together "for clarity"? The same argument can be made for regional and tabloid/free. 
+    #Do you have a vital interest in differentiating between the two? Otherwise I would suggest to lump them together nevertheless.
+
 corpus$media_type <- as.factor(corpus$media_type)
 corpus$peak <- as.factor(corpus$peak)
 corpus$policy_output[corpus$policy_output %in% c("hard", "hard / soft")] <- "hard" 
 #MS: what is this category "hard / soft" anyways? If it's not soft output, it's hard, right? So we can call it that way...
 # RW: by the same logic: if it's not hard, then it's soft, so we can call it soft. I don't know which way is better, but we should have
 #     theoretical reasons for whether hard/soft is more like hard or more like soft.
+# MS: Yes, you're right. Sorry, I was imprecise. I thought that the "hard/soft" category is a category for governors that can produce hard
+    #output (i.e. they can exercise authority through formal means), but that very rarely do so. For me this would qualify as "hard" output,
+    #since they have the possibility to do so in principle. But maybe I'm also wrong about this interpretation of the coding
 corpus$policy_output <- as.factor(corpus$policy_output)
+#JR: In IP2 it is likely that all hard is concentrated in the EC, again with a separate analysis in the chapter this should not be a problem.
 #corpus$policy_field_1 <- tolower(corpus$policy_field_1)
 #corpus$policy_field_1 <- ifelse(corpus$policy_field_1 %in% c("multiple", "not definable", "", "."), "multiple", "specific")
 #corpus$policy_field_1[is.na(corpus$policy_field_1)] <- "multiple"
@@ -83,14 +110,23 @@ corpus$policy_output <- as.factor(corpus$policy_output)
 # RW: in my understanding, policy_field is the policy issue area in which an actor is active, whereas policy_scope describes the
 #     scope that the actor has. I could imagine that accountability may differ across policy fields because fields like commerce,
 #     economic liberalism, environment, and security are more salient than fields like science or justice.
+# MS: Yes, that differentiation might be interesting, but if you look at the levels this recoded factor has, it's just "multiple" 
+      #and "specific". So no possibility to distinguish policy fields substantially, but only - as I understand it - whether an actor
+      #is engaged in many/several policy domains, or only in one/few. Hence my question how it differs from policy scope, which in my understanding
+      #measures the same thing
 corpus <- corpus[!is.na(corpus$policy_output),]
 
 #IP-identifier
 #MS: Problem with bank for international settlements, it's both listed (in excel-list) for IP2 and IP4 
-#(at the moment I've assigned it to IP2) -> you have to decide which one takes it; please
-#also verify that you don't have other overlaps in governors that I might have missed
+    #(at the moment I've assigned it to IP2) -> @Jofre and @Reto: you have to decide which one takes it; please
+    #also verify that you don't have other overlaps in governors that I might have missed
 # RW: sorry, a basic question: what are the criteria that delineate the different IPs? IMO, the entities should be similar within an IP and different across IPs.
 #     But when I look at the clusters below, they seem to be pretty heterogeneous.
+#MS: You're right, it's not very clear. IP1 is clear I guess, it's the only subnational one. For IP2 I think it's only 
+    # the international organizations, for IP5 it's only private governors, but for IP4, I'm not exactly sure what the selection criterion
+    # was, apart from the fact that it's transnational governmental networks. So I guess it's mostly about making the difference bw. 
+    # IP2 and IP4 more clear. But technically, you should know that ;).
+
 corpus$IP_ID <- "IP5"
 corpus$IP_ID[corpus$entity_name %in% c("greater london authority (gla)","transport for london",
                                        "west midlands integrated transport authority (wmita)")] <- "IP1"
@@ -111,6 +147,8 @@ corpus$IP_ID[corpus$entity_name %in% c("basel committee on banking supervision",
                                        "international organization of securities commissions")] <- "IP4"
 
 # RW: IP_ID should be a factor. Or did I overlook something here?
+# MS: You're right, forgot to do that, here it goes
+corpus$IP_ID <- as.factor(corpus$IP_ID)
 
 #Dummy-Variables for "extraordinary" governors
 #MS: in general we should keep the number of these dummies as low as possible, since each of them means an additional interaction
@@ -209,6 +247,10 @@ formula_prev <- "prevalence =~ tonality_verbalized:IP_ID + territorial_scope:IP_
 #     be no interaction between IP4 and not-informative. What I consider more problematic are the cases with very small numbers of observations
 #     in cells. For example, take actor_type and IP_ID: hybrid_private and IP4 has two observations. So there will be an interaction, but only based
 #     on two observations (problematic in the sense that we will have much uncertainty around estimates, but I guess we cannot avoid that).
+
+#MS: Ok, that makes sense. But apart from the fact that we will have very uncertain estimates for that interaction, does it affect the rest
+    #of the model in a negative way? If not, we can just not interpret that particular interaction and still leave it in, right?
+
 
 # evaluate on the 100 most probable words per topic
 n_words <- 100
