@@ -99,6 +99,7 @@ corpus$policy_output[corpus$policy_output %in% c("hard", "hard / soft")] <- "har
 # MS: Yes, you're right. Sorry, I was imprecise. I thought that the "hard/soft" category is a category for governors that can produce hard
     #output (i.e. they can exercise authority through formal means), but that very rarely do so. For me this would qualify as "hard" output,
     #since they have the possibility to do so in principle. But maybe I'm also wrong about this interpretation of the coding
+# RW: seeing it that way, yes, I agree with your suggestion for recoding.
 corpus$policy_output <- as.factor(corpus$policy_output)
 #JR: In IP2 it is likely that all hard is concentrated in the EC, again with a separate analysis in the chapter this should not be a problem.
 #corpus$policy_field_1 <- tolower(corpus$policy_field_1)
